@@ -114,8 +114,42 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: develop-${{ github.sha }}
       run: |
-        # Replace image placeholders in deployment
-        envsubst < k8s/deployment.yaml | kubectl apply -f -
+        echo "=== Deploying with following configuration ==="
+        echo "ECR_REGISTRY: $ECR_REGISTRY"
+        echo "IMAGE_TAG: $IMAGE_TAG"
+        echo "Full image: $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
+        echo ""
+        echo "=== Deployment YAML after substitution ==="
+        envsubst < k8s/deployment.yaml | tee /tmp/deployment.yaml
+        echo ""
+        kubectl apply -f /tmp/deployment.yaml
+        
+    - name: Wait and check pods
+      run: |
+        echo "Waiting 30 seconds for pods to start..."
+        sleep 30
+        echo ""
+        echo "=== Pod Status ==="
+        kubectl get pods -n default -l app=guestbook -o wide
+        
+    - name: Debug pod issues
+      if: always()
+      run: |
+        echo "=== Describe Deployment ==="
+        kubectl describe deployment guestbook -n default
+        echo ""
+        echo "=== Pod Details ==="
+        kubectl describe pods -n default -l app=guestbook
+        echo ""
+        echo "=== Pod Logs ==="
+        for pod in $(kubectl get pods -n default -l app=guestbook -o name); do
+          echo "--- Logs from $pod ---"
+          kubectl logs -n default $pod --tail=100 || echo "Could not get logs from $pod"
+          echo ""
+        done
+        echo ""
+        echo "=== Recent Events ==="
+        kubectl get events -n default --sort-by='.lastTimestamp' | tail -30
         
     - name: Verify deployment
       run: |
@@ -158,8 +192,30 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Replace image placeholders in deployment
-        envsubst < k8s/deployment.yaml | kubectl apply -f -
+        echo "=== Deploying with following configuration ==="
+        echo "ECR_REGISTRY: $ECR_REGISTRY"
+        echo "IMAGE_TAG: $IMAGE_TAG"
+        echo "Full image: $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
+        echo ""
+        echo "=== Deployment YAML after substitution ==="
+        envsubst < k8s/deployment.yaml | tee /tmp/deployment.yaml
+        echo ""
+        kubectl apply -f /tmp/deployment.yaml
+        
+    - name: Debug pod issues
+      if: always()
+      run: |
+        echo "=== Pod Status ==="
+        kubectl get pods -n default -l app=guestbook -o wide
+        echo ""
+        echo "=== Describe Pods ==="
+        kubectl describe pods -n default -l app=guestbook
+        echo ""
+        echo "=== Pod Logs ==="
+        for pod in $(kubectl get pods -n default -l app=guestbook -o name); do
+          echo "--- Logs from $pod ---"
+          kubectl logs -n default $pod --tail=100 || echo "Could not get logs"
+        done
         
     - name: Verify deployment
       run: |
