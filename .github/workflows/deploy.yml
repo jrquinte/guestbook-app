@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-uri: ${{ steps.push.outputs.image-uri }}
       
     steps:
     - name: Checkout code
@@ -48,35 +48,20 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Extract metadata for Docker
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        platforms: linux/amd64
-
-    - name: Image digest
-      run: echo ${{ steps.docker_build.outputs.digest }}
+    - name: Build, tag, and push image
+      id: push
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || format('develop-{0}', github.sha) }}
+      run: |
+        echo "Building image with tag: $IMAGE_TAG"
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        
+        # Output the full image URI
+        echo "image-uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
   deploy-dev:
     name: 'Deploy to Development'
@@ -112,13 +97,22 @@ jobs:
     - name: Deploy to Kubernetes
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
         IMAGE_TAG: develop-${{ github.sha }}
       run: |
         echo "=== Deploying with following configuration ==="
         echo "ECR_REGISTRY: $ECR_REGISTRY"
+        echo "ECR_REPOSITORY: $ECR_REPOSITORY"
         echo "IMAGE_TAG: $IMAGE_TAG"
-        echo "Full image: $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
+        echo "Full image from build job: ${{ needs.build.outputs.image-uri }}"
         echo ""
+        
+        # Verify variables are set
+        if [ -z "$ECR_REGISTRY" ]; then
+          echo "ERROR: ECR_REGISTRY is empty!"
+          exit 1
+        fi
+        
         echo "=== Deployment YAML after substitution ==="
         envsubst < k8s/deployment.yaml | tee /tmp/deployment.yaml
         echo ""
@@ -190,13 +184,22 @@ jobs:
     - name: Deploy to Kubernetes
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        IMAGE_TAG: latest
       run: |
         echo "=== Deploying with following configuration ==="
         echo "ECR_REGISTRY: $ECR_REGISTRY"
+        echo "ECR_REPOSITORY: $ECR_REPOSITORY"
         echo "IMAGE_TAG: $IMAGE_TAG"
-        echo "Full image: $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
+        echo "Full image from build job: ${{ needs.build.outputs.image-uri }}"
         echo ""
+        
+        # Verify variables are set
+        if [ -z "$ECR_REGISTRY" ]; then
+          echo "ERROR: ECR_REGISTRY is empty!"
+          exit 1
+        fi
+        
         echo "=== Deployment YAML after substitution ==="
         envsubst < k8s/deployment.yaml | tee /tmp/deployment.yaml
         echo ""
