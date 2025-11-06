@@ -62,21 +62,31 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
 ---
+# deployment.yaml - add annotations to the service
 apiVersion: v1
 kind: Service
 metadata:
   name: guestbook
   labels:
     app: guestbook
+  annotations:
+    # Explicitly specify the type of Load Balancer
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "instance"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    # Health check settings
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "TCP"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "traffic-port"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
 spec:
   type: LoadBalancer
   selector:
     app: guestbook
   ports:
-  - port: 80
-    targetPort: 3000
-    protocol: TCP
-    name: http
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
   sessionAffinity: None
 ---
 apiVersion: autoscaling/v2
