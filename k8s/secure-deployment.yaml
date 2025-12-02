@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secure-guestbook
+  namespace: secure-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secure-guestbook
+  template:
+    metadata:
+      labels:
+        app: secure-guestbook
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: guestbook
+          image: 471112766719.dkr.ecr.us-east-1.amazonaws.com/k8s-learning/guestbook:v2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          ports:
+            - containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /hello
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /hello
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 3
