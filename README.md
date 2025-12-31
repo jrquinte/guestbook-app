@@ -2,7 +2,7 @@
 
 A complete Infrastructure as Code (IaC) and CI/CD implementation using AWS EKS, Terraform, Docker, and GitHub Actions.
 
-[Link to infraestructure repo](https://github.com/jrquinte/kubernetes-infrastructure)
+[Link to infrastructure repo](https://github.com/jrquinte/kubernetes-infrastructure)
 
 ## 📋 Table of Contents
 
